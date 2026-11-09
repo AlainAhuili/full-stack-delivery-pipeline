@@ -1,46 +1,53 @@
-version: '3.8'
-
+# Persistent local "production": runs the release candidate that passed acceptance.
+# Needs GIT_SHA (the image tag) and a .env file with the secrets; copy .env.example to .env.
+# Only the UI is published (port 9000); the API is reached through its /api proxy and the
+# database is not exposed at all.
 services:
   db-prod:
-    image: crud-database:3a1ff16
+    image: crud-database:${GIT_SHA:?set GIT_SHA to the release candidate tag}
+    pull_policy: never
     container_name: crud-production-db
     restart: always
     environment:
-      POSTGRES_USER: prod_user
-      POSTGRES_PASSWORD: prod_secure_password_2026
-      POSTGRES_DB: production_crud_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env}
     volumes:
       - prod_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U prod_user -d production_crud_db"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   backend-prod:
-    image: crud-backend:3a1ff16
+    image: crud-backend:${GIT_SHA:?set GIT_SHA to the release candidate tag}
+    pull_policy: never
     container_name: crud-production-backend
     restart: always
     environment:
       NODE_ENV: production
-      PORT: 3001
-      DATABASE_URL: postgres://prod_user:prod_secure_password_2026@db-prod:5432/production_crud_db
-      JWT_SECRET: super_secret_production_key_9988
-    ports:
-      - "3001:3001"
+      DB_HOST: db-prod
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET:?set in .env}
     depends_on:
       db-prod:
         condition: service_healthy
 
   frontend-prod:
-    image: crud-frontend:3a1ff16
+    image: crud-frontend:${GIT_SHA:?set GIT_SHA to the release candidate tag}
+    pull_policy: never
     container_name: crud-production-frontend
     restart: always
+    environment:
+      BACKEND_URL: http://backend-prod:3000
     ports:
       - "9000:8080"
+    depends_on:
+      backend-prod:
+        condition: service_healthy
 
 volumes:
   prod_db_data:
-    driver: local

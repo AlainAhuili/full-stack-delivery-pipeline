@@ -1,16 +1,14 @@
 {
   "name": "frontend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
+  "private": true,
+  "description": "Static web UI of the CRUD application, served by nginx",
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
-    "lint": "echo 'Running frontend linter... (passed)'",
-    "test:unit": "echo 'Running frontend unit tests... (passed)'"
+    "lint": "node ../scripts/check-syntax.js src tests",
+    "test:unit": "node --test \"tests/unit/**/*.test.js\""
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC"
 }
