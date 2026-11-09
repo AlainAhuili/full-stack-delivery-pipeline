@@ -24,9 +24,12 @@
         #puzzle-btn:hover { background: #59339D; }
         .puzzle-panel { border: 2px solid #6F42C1; border-radius: 8px; padding: 15px; margin: 15px 0; background: #FAF7FF; }
         .puzzle-panel h3 { margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
-        .puzzle-question { font-size: 1.8em; font-weight: bold; text-align: center; margin: 15px 0; letter-spacing: 1px; }
-        .puzzle-row { display: flex; gap: 10px; align-items: center; }
-        .puzzle-row input[type="number"] { flex: 1; padding: 8px; font-size: 1.1em; }
+        /* pre-line keeps the line breaks of multi-line pattern puzzles ("7 = 42" ... "3 = ?") */
+        .puzzle-question { font-size: 1.8em; font-weight: bold; text-align: center; margin: 15px 0; letter-spacing: 1px; white-space: pre-line; line-height: 1.35; font-variant-numeric: tabular-nums; }
+        .puzzle-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .puzzle-row input[type="number"] { flex: 1; min-width: 0; padding: 8px; font-size: 1.1em; }
+        #puzzle-form { flex-wrap: nowrap; }
+        .puzzle-score { white-space: nowrap; }
         .puzzle-row select { padding: 8px; }
         .puzzle-feedback { margin-top: 10px; padding: 8px; border-radius: 4px; }
         .puzzle-feedback.correct { background: #D4EDDA; color: #155724; }

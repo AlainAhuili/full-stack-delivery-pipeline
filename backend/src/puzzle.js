@@ -1,4 +1,4 @@
-// "Number Quest": arithmetic puzzles generated and checked on the server. The client only
+// "Number Quest": arithmetic and logic puzzles generated and checked on the server. The client only
 // receives the question; the answer stays in the store until the player submits a guess.
 const crypto = require('node:crypto');
 const { ValidationError } = require('./errors');
@@ -7,9 +7,9 @@ const DIFFICULTIES = ['easy', 'medium', 'hard'];
 
 // Number ranges and puzzle kinds per difficulty.
 const LEVELS = {
-  easy: { max: 10, kinds: ['missing', 'sequence'] },
-  medium: { max: 20, kinds: ['missing', 'sequence', 'precedence'] },
-  hard: { max: 50, kinds: ['missing', 'sequence', 'precedence'] },
+  easy: { max: 10, kinds: ['missing', 'sequence', 'pattern'] },
+  medium: { max: 20, kinds: ['missing', 'sequence', 'precedence', 'pattern'] },
+  hard: { max: 50, kinds: ['missing', 'sequence', 'precedence', 'pattern'] },
 };
 
 const randInt = (rng, min, max) => min + Math.floor(rng() * (max - min + 1));
@@ -61,7 +61,47 @@ function precedence(rng, max) {
   return { question: `${big} − ${b} × ${c} = ?`, answer: big - b * c, explanation: `${b} × ${c} = ${b * c} first, then ${big} − ${b * c} = ${big - b * c}` };
 }
 
-const GENERATORS = { missing: missingOperand, sequence, precedence };
+// Hidden-rule puzzles ("7 = 42, 6 = 30, 5 = 20, 3 = ?"): every line applies the same rule to
+// the number on the left. Each rule has a readable name and a worked step for the explanation.
+const PATTERN_RULES = {
+  linear: (rng) => {
+    const a = randInt(rng, 2, 4);
+    const b = randInt(rng, 1, 6);
+    return { name: `${a} × n + ${b}`, apply: (n) => a * n + b, step: (n) => `${a} × ${n} + ${b}` };
+  },
+  timesPrevious: () => ({ name: 'n × (n − 1)', apply: (n) => n * (n - 1), step: (n) => `${n} × ${n - 1}` }),
+  timesNext: () => ({ name: 'n × (n + 1)', apply: (n) => n * (n + 1), step: (n) => `${n} × ${n + 1}` }),
+  squarePlus: (rng) => {
+    const k = randInt(rng, 1, 9);
+    return { name: `n × n + ${k}`, apply: (n) => n * n + k, step: (n) => `${n} × ${n} + ${k}` };
+  },
+  timesOffset: (rng) => {
+    const k = randInt(rng, 2, 5);
+    return { name: `n × (n + ${k})`, apply: (n) => n * (n + k), step: (n) => `${n} × ${n + k}` };
+  },
+};
+
+function pattern(rng, max) {
+  const rules = max <= 10 ? ['linear'] : max <= 20 ? ['timesPrevious', 'timesNext', 'squarePlus'] : Object.keys(PATTERN_RULES).slice(1);
+  const rule = PATTERN_RULES[pick(rng, rules)](rng);
+
+  // Four different inputs: three worked examples (largest first, like a puzzle card) and one to solve.
+  const top = max <= 10 ? 9 : 12;
+  const inputs = new Set();
+  while (inputs.size < 4) inputs.add(randInt(rng, 2, top));
+  const [ask, ...shown] = [...inputs];
+  shown.sort((x, y) => y - x);
+
+  const lines = shown.map((n) => `${n} = ${rule.apply(n)}`);
+  const answer = rule.apply(ask);
+  return {
+    question: [...lines, `${ask} = ?`].join('\n'),
+    answer,
+    explanation: `Rule: ${rule.name}, so ${rule.step(ask)} = ${answer}`,
+  };
+}
+
+const GENERATORS = { missing: missingOperand, sequence, precedence, pattern };
 
 function generatePuzzle(difficulty, rng = Math.random) {
   const level = LEVELS[difficulty];

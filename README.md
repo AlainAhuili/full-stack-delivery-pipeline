@@ -25,9 +25,12 @@ The **🧩 Math puzzle** button in the control panel opens the game. All game lo
 backend (`backend/src/puzzle.js`); the browser only shows the question and sends the guess.
 
 - **Puzzle kinds:** missing number (`7 × ? = 42`), sequences (`3, 6, 12, 24, ?`, constant step
-  or constant factor) and order of operations (`4 + 3 × 5 = ?`).
-- **Levels:** easy (numbers up to 10, no order-of-operations puzzles), medium (up to 20) and
-  hard (up to 50).
+  or constant factor), order of operations (`4 + 3 × 5 = ?`) and pattern rules: three worked
+  lines from a hidden rule, then one to solve (`7 = 42`, `6 = 30`, `5 = 20`, `3 = ?` → n × (n − 1)
+  = 6).
+- **Levels:** easy (numbers up to 10, no order-of-operations puzzles, linear pattern rules such
+  as 2 × n + 3), medium (up to 20; rules n × (n − 1), n × (n + 1), n × n + k) and hard (up to
+  50; adds n × (n + k)).
 - **Rules:** each puzzle can be answered once; the reply says whether the answer was right and
   shows the solution with an explanation. Open puzzles expire after 10 minutes, and at most 1000
   are kept, so memory stays bounded.

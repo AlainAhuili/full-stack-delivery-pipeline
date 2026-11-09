@@ -28,6 +28,19 @@ function solve({ kind, question }) {
     assert.ok(t.every((v, i) => i === 0 || v / t[i - 1] === factor), `not a sequence: ${question}`);
     return t[t.length - 1] * factor;
   }
+  if (kind === 'pattern') {
+    // Every rule is at most quadratic, so the three examples determine it: evaluate the unique
+    // parabola through them (Lagrange interpolation) at the asked input.
+    const lines = question.split('\n');
+    const points = lines.slice(0, 3).map((line) => line.split(' = ').map(num));
+    const x = num(lines[3].match(/^(\d+) = \?$/)[1]);
+    return Math.round(
+      points.reduce((sum, [xi, yi], i) => {
+        const others = points.filter((_, j) => j !== i);
+        return sum + yi * others.reduce((p, [xj]) => (p * (x - xj)) / (xi - xj), 1);
+      }, 0),
+    );
+  }
   const [, a, op, b, c] = question.match(/^(\d+) ([+−]) (\d+) × (\d+) = \?$/);
   return op === '+' ? num(a) + num(b) * num(c) : num(a) - num(b) * num(c);
 }
@@ -49,8 +62,36 @@ test('easy puzzles skip order-of-operations; harder levels include every kind', 
     const rng = seeded(7);
     return new Set(Array.from({ length: 200 }, () => generatePuzzle(difficulty, rng).kind));
   };
-  assert.deepEqual([...kinds('easy')].sort(), ['missing', 'sequence']);
-  assert.deepEqual([...kinds('hard')].sort(), ['missing', 'precedence', 'sequence']);
+  assert.deepEqual([...kinds('easy')].sort(), ['missing', 'pattern', 'sequence']);
+  assert.deepEqual([...kinds('hard')].sort(), ['missing', 'pattern', 'precedence', 'sequence']);
+});
+
+test('pattern puzzles show three different worked examples, largest first, then the question', () => {
+  const rng = seeded(11);
+  for (let i = 0; i < 300; i++) {
+    const puzzle = generatePuzzle(pick3(i), rng);
+    if (puzzle.kind !== 'pattern') continue;
+    const lines = puzzle.question.split('\n');
+    assert.equal(lines.length, 4, puzzle.question);
+    const inputs = lines.map((line) => Number(line.split(' = ')[0]));
+    assert.equal(new Set(inputs).size, 4, `inputs repeat: ${puzzle.question}`);
+    assert.ok(inputs[0] > inputs[1] && inputs[1] > inputs[2], puzzle.question);
+    assert.match(lines[3], /^\d+ = \?$/);
+    assert.match(puzzle.explanation, /^Rule: /);
+  }
+});
+
+const pick3 = (i) => DIFFICULTIES[i % DIFFICULTIES.length];
+
+test('medium and hard pattern rules are not simply linear', () => {
+  const rng = seeded(21);
+  const rules = new Set();
+  for (let i = 0; i < 400; i++) {
+    const puzzle = generatePuzzle('hard', rng);
+    if (puzzle.kind === 'pattern') rules.add(puzzle.explanation.split(',')[0]);
+  }
+  assert.ok([...rules].some((rule) => rule.includes('n × (n − 1)')), [...rules].join(' | '));
+  assert.ok([...rules].every((rule) => !/^Rule: \d × n \+/.test(rule)), [...rules].join(' | '));
 });
 
 test('unknown difficulty is rejected', () => {
