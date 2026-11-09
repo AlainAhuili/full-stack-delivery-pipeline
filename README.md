@@ -30,7 +30,10 @@ Browser ──▶ frontend (nginx, :8080) ──/api/──▶ backend (Node.js,
 
 ```text
 ├── .github/workflows/
-│   └── commit-stage.yml        # CI: commit stage, then acceptance stage
+│   └── commit-stage.yml        # CI: commit, acceptance, then production stage
+├── infra/
+│   ├── terraform/              # Google Cloud production (Cloud Run, registry, CI identity)
+│   └── first-deploy.sh         # one-time creation of production
 ├── backend/
 │   ├── src/
 │   │   ├── index.js            # process entry point (listens on PORT, default 3000)
@@ -86,11 +89,66 @@ install. Node.js 22 or newer is required.
 | :--- | :--- | :--- |
 | **1. Commit** | `make commit-stage` | Syntax check, unit tests (frontend and backend), backend component tests, then builds `crud-frontend`, `crud-backend` and `crud-database` tagged with the short commit SHA. |
 | **2. Acceptance** | `make acceptance` | Starts a throwaway environment from those images (fresh database, migrations applied), runs `tests/acceptance` through the frontend proxy (register, log in, create, list and delete), then removes the environment. |
-| **3. Production** | `make prod-up` | Runs the accepted images with secrets from `.env`. Only the UI (port 9000) is published. |
+| **3. Production** | CI, on `main` | Pushes the accepted images to Artifact Registry, rolls them out to Cloud Run and smoke-tests the live URL. See [Production on Google Cloud](#production-on-google-cloud). |
 
 GitHub Actions (`.github/workflows/commit-stage.yml`) runs stages 1 and 2 on every push and pull
-request to `main`. Images stay on the CI runner; publishing them to a registry (for example
-Docker Hub) is the next step for a real deployment.
+request to `main`, and stage 3 on pushes to `main` only. The production stage receives the
+images built in stage 1 as a build artifact, so nothing is rebuilt between acceptance and
+production. `make prod-up` still runs the same images locally (port 9000) with secrets from `.env`.
+
+---
+
+## Production on Google Cloud
+
+The infrastructure is code in `infra/terraform/`, with its state in a versioned GCS bucket.
+
+```text
+Internet ──HTTPS──▶ Cloud Run service "crud-production" (europe-west3, project full-stack-delivery-380414)
+                     ├── frontend  nginx :8080, the only container that receives traffic
+                     └── backend   Node.js :3000 on localhost, reached through /api/
+```
+
+| File | Defines |
+| :--- | :--- |
+| `main.tf` | APIs, Artifact Registry repository `crud` (keeps the last 20 images, deletes after 30 days), runtime service account without project roles, the Cloud Run service, public access |
+| `github.tf` | Workload Identity pool and provider for GitHub Actions, the `github-deployer` service account and its three permissions |
+| `variables.tf`, `production.tfvars` | Project, region, service name, instance limit, GitHub repository and OIDC subject |
+| `outputs.tf` | Public URL, registry path, the values stored in the GitHub `production` environment |
+
+**Who can deploy.** Only jobs of this repository that run in the GitHub environment
+`production` can act as `github-deployer`, and that environment only accepts the `main` branch.
+No service account key exists. The deployer can push to the `crud` repository, roll out
+revisions of this one service and run them as the runtime account; it cannot change IAM.
+
+**Terraform and CI split.** Terraform owns the service's shape: containers, ports, probes,
+scaling and access. CI only rolls out new images, and Terraform ignores image changes, so the
+two do not fight.
+
+**Limits.** At most one instance runs, because items are held in the backend's memory. There is
+no database in production yet; add Cloud SQL here when the API starts using PostgreSQL.
+
+### First deploy (once)
+
+The project and state bucket already exist. Then, from the repository root in Git Bash:
+
+```bash
+bash infra/first-deploy.sh
+```
+
+It creates the registry, builds and pushes the current commit's images, then applies everything
+else and prints the URL. Each `terraform apply` shows its plan and asks for `yes`. Afterwards,
+every push to `main` deploys automatically.
+
+### Changing the infrastructure
+
+```bash
+cd infra/terraform
+export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token)
+terraform init -backend-config="bucket=full-stack-delivery-380414-tfstate"
+terraform plan -var-file=production.tfvars -var image_tag=$(git rev-parse --short HEAD)
+```
+
+`image_tag` only matters when the service is first created.
 
 ---
 
