@@ -16,7 +16,7 @@ echo "==> Terraform state in gs://$PROJECT-tfstate"
 terraform init -input=false -reconfigure -backend-config="bucket=$PROJECT-tfstate"
 
 echo "==> 1/3 Image registry"
-terraform apply -input=false -var-file=production.tfvars -var "image_tag=$TAG" \
+terraform apply -var-file=production.tfvars -var "image_tag=$TAG" \
   -target=google_artifact_registry_repository.images
 
 echo "==> 2/3 Build and push release candidate $TAG"
@@ -27,7 +27,7 @@ for part in frontend backend; do
 done
 
 echo "==> 3/3 Service, identities and permissions"
-terraform apply -input=false -var-file=production.tfvars -var "image_tag=$TAG"
+terraform apply -var-file=production.tfvars -var "image_tag=$TAG"
 
 echo
 echo "Production: $(terraform output -raw url)"
