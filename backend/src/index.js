@@ -2,6 +2,7 @@
 const http = require('http');
 const { createApp } = require('./app');
 const { createItemStore } = require('./items');
+const { createPuzzleStore } = require('./puzzle');
 
 const store = createItemStore([
   { id: 1, name: 'Database Record Cluster Alpha' },
@@ -10,7 +11,9 @@ const store = createItemStore([
 
 const PORT = Number(process.env.PORT) || 3000;
 
-const server = http.createServer(createApp({ store }));
+const puzzles = createPuzzleStore();
+
+const server = http.createServer(createApp({ store, puzzles }));
 server.listen(PORT, () => {
   console.log(`Backend listening on port ${PORT}`);
 });

@@ -149,10 +149,92 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==========================================
+    // NUMBER QUEST PUZZLE GAME
+    // The backend creates each puzzle and keeps its answer; the UI only shows the question,
+    // sends the guess and displays the verdict.
+    // ==========================================
+    const puzzleBtn = document.getElementById('puzzle-btn');
+    const puzzlePanel = document.getElementById('puzzle-panel');
+    const puzzleCloseBtn = document.getElementById('puzzle-close-btn');
+    const puzzleNewBtn = document.getElementById('puzzle-new-btn');
+    const puzzleDifficulty = document.getElementById('puzzle-difficulty');
+    const puzzleQuestion = document.getElementById('puzzle-question');
+    const puzzleForm = document.getElementById('puzzle-form');
+    const puzzleAnswer = document.getElementById('puzzle-answer');
+    const puzzleSubmitBtn = document.getElementById('puzzle-submit-btn');
+    const puzzleFeedback = document.getElementById('puzzle-feedback');
+    const puzzleScore = document.getElementById('puzzle-score');
+    const puzzleStreak = document.getElementById('puzzle-streak');
+
+    const game = { puzzleId: null, score: 0, streak: 0 };
+
+    function setPuzzleOpen(open) {
+        puzzlePanel.classList.toggle('hidden', !open);
+        puzzleBtn.setAttribute('aria-expanded', String(open));
+    }
+
+    function showVerdict(text, correct) {
+        puzzleFeedback.textContent = text;
+        puzzleFeedback.className = `puzzle-feedback ${correct ? 'correct' : 'wrong'}`;
+    }
+
+    async function startPuzzle() {
+        puzzleFeedback.className = 'puzzle-feedback hidden';
+        puzzleQuestion.textContent = '…';
+        puzzleAnswer.value = '';
+        puzzleSubmitBtn.disabled = true;
+        try {
+            const puzzle = await App.newPuzzle(puzzleDifficulty.value);
+            game.puzzleId = puzzle.id;
+            puzzleQuestion.textContent = puzzle.question;
+            puzzleSubmitBtn.disabled = false;
+            puzzleAnswer.focus();
+        } catch (err) {
+            game.puzzleId = null;
+            puzzleQuestion.textContent = '—';
+            displaySystemMessage(err.message, true);
+        }
+    }
+
+    puzzleBtn.addEventListener('click', () => {
+        const opening = puzzlePanel.classList.contains('hidden');
+        setPuzzleOpen(opening);
+        if (opening && !game.puzzleId) startPuzzle();
+    });
+    puzzleCloseBtn.addEventListener('click', () => setPuzzleOpen(false));
+    puzzleNewBtn.addEventListener('click', startPuzzle);
+    puzzleDifficulty.addEventListener('change', startPuzzle);
+
+    puzzleForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!game.puzzleId) return;
+        const answer = Number(puzzleAnswer.value);
+        puzzleSubmitBtn.disabled = true;
+        try {
+            const result = await App.answerPuzzle(game.puzzleId, answer);
+            game.puzzleId = null; // each puzzle can be answered once
+            if (result.correct) {
+                game.score += 1;
+                game.streak += 1;
+                showVerdict(`Correct! ${result.explanation}`, true);
+            } else {
+                game.streak = 0;
+                showVerdict(`Not quite: the answer is ${result.solution}. ${result.explanation}`, false);
+            }
+            puzzleScore.textContent = String(game.score);
+            puzzleStreak.textContent = String(game.streak);
+        } catch (err) {
+            puzzleSubmitBtn.disabled = false;
+            displaySystemMessage(err.message, true);
+        }
+    });
+
+    // ==========================================
     // TEARDOWN LIFECYCLE
     // ==========================================
     logoutBtn.addEventListener('click', () => {
         App.clearToken();
+        setPuzzleOpen(false);
         renderView();
     });
 

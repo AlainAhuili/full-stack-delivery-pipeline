@@ -97,11 +97,12 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE }}" \
+          # Service-wide flags must come first: everything after --container applies to that
+          # container, and gcloud rejects service flags (such as --quiet) placed there.
+          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE }}" --quiet \
             --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
             --container=frontend --image="$REGISTRY/crud-frontend:$TAG" \
-            --container=backend --image="$REGISTRY/crud-backend:$TAG" \
-            --quiet
+            --container=backend --image="$REGISTRY/crud-backend:$TAG"
           url=$(gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE }}" \
             --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
             --format='value(status.url)')
