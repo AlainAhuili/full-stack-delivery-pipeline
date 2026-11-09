@@ -19,6 +19,25 @@ Browser ──▶ frontend (nginx, :8080) ──/api/──▶ backend (Node.js,
   modules (`items.js`, `auth.js`) that are unit-tested without HTTP or a database.
 - **Database:** PostgreSQL with SQL migrations applied in file-name order.
 
+### Number Quest (math puzzle game)
+
+The **🧩 Math puzzle** button in the control panel opens the game. All game logic is in the
+backend (`backend/src/puzzle.js`); the browser only shows the question and sends the guess.
+
+- **Puzzle kinds:** missing number (`7 × ? = 42`), sequences (`3, 6, 12, 24, ?`, constant step
+  or constant factor) and order of operations (`4 + 3 × 5 = ?`).
+- **Levels:** easy (numbers up to 10, no order-of-operations puzzles), medium (up to 20) and
+  hard (up to 50).
+- **Rules:** each puzzle can be answered once; the reply says whether the answer was right and
+  shows the solution with an explanation. Open puzzles expire after 10 minutes, and at most 1000
+  are kept, so memory stays bounded.
+- **Score:** the panel counts correct answers and the current streak.
+
+| Endpoint | Body | Response |
+| :--- | :--- | :--- |
+| `POST /api/puzzles` | `{ "difficulty": "easy" \| "medium" \| "hard" }` (default `easy`) | `201 { id, kind, difficulty, question }`; the answer is not included |
+| `POST /api/puzzles/:id/answer` | `{ "answer": <whole number> }` | `200 { correct, solution, explanation }`; `404` once answered or expired; `400` for a non-integer |
+
 > **Current state:** items are kept in the backend's memory, and registration and login only
 > validate the payload and return a placeholder token. `userRepository.js` and the `users` table
 > (migrations 001–003) are the next step towards persistence. Until then, the database tier is
@@ -40,6 +59,7 @@ Browser ──▶ frontend (nginx, :8080) ──/api/──▶ backend (Node.js,
 │   │   ├── app.js              # HTTP routes
 │   │   ├── items.js            # item validation + in-memory store
 │   │   ├── auth.js             # credential validation, token
+│   │   ├── puzzle.js           # Number Quest: puzzle generation and answer checking
 │   │   ├── errors.js
 │   │   └── userRepository.js   # PostgreSQL access for users (not wired in yet)
 │   ├── tests/

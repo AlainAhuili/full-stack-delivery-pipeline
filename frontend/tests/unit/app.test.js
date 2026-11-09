@@ -62,6 +62,27 @@ test('a 401 clears the token and returns null', async () => {
   assert.equal(App.getToken(), null);
 });
 
+test('newPuzzle asks the backend for a puzzle at the chosen level', async () => {
+  stubFetch(respond(201, { id: 'p1', question: '3 + ? = 5' }));
+  assert.deepEqual(await App.newPuzzle('hard'), { id: 'p1', question: '3 + ? = 5' });
+  assert.equal(calls[0].url, '/api/puzzles');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].options.body), { difficulty: 'hard' });
+});
+
+test('answerPuzzle posts the guess and returns the verdict', async () => {
+  stubFetch(respond(200, { correct: true, solution: 2, explanation: '5 − 3 = 2' }));
+  const verdict = await App.answerPuzzle('p/1', 2);
+  assert.equal(verdict.correct, true);
+  assert.equal(calls[0].url, '/api/puzzles/p%2F1/answer');
+  assert.deepEqual(JSON.parse(calls[0].options.body), { answer: 2 });
+});
+
+test('puzzle errors surface the server message', async () => {
+  stubFetch(respond(404, { error: 'Puzzle not found, already answered or expired' }));
+  await assert.rejects(App.answerPuzzle('gone', 1), /already answered/);
+});
+
 test('create and delete call the item endpoints', async () => {
   stubFetch(respond(201, { id: 3, name: 'x' }), respond(200, { success: true }));
   assert.deepEqual(await App.createItem('x'), { id: 3, name: 'x' });

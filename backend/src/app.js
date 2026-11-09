@@ -31,7 +31,7 @@ function send(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function createApp({ store }) {
+function createApp({ store, puzzles }) {
   return async function handle(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -75,6 +75,20 @@ function createApp({ store }) {
           return send(res, 404, { error: `Item ${id} not found` });
         }
         return send(res, 200, { success: true, message: `Record ${id} deleted.` });
+      }
+
+      // ---- Number Quest puzzle game
+      if (path === '/api/puzzles' && req.method === 'POST') {
+        return send(res, 201, puzzles.create(await readJsonBody(req)));
+      }
+
+      const answer = path.match(/^\/api\/puzzles\/([0-9a-f-]{36})\/answer$/);
+      if (answer && req.method === 'POST') {
+        const result = puzzles.answer(answer[1], await readJsonBody(req));
+        if (!result) {
+          return send(res, 404, { error: 'Puzzle not found, already answered or expired' });
+        }
+        return send(res, 200, result);
       }
 
       return send(res, 404, { error: 'Route not found' });

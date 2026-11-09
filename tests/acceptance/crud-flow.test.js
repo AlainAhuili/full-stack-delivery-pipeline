@@ -57,6 +57,28 @@ test('a user registers, logs in and runs the full CRUD cycle', async () => {
   assert.ok(!afterDelete.body.some((item) => item.id === created.body.id));
 });
 
+test('the GUI offers the math puzzle button', async () => {
+  const html = await (await fetch(`${BASE_URL}/`)).text();
+  assert.match(html, /id="puzzle-btn"/);
+});
+
+test('a player gets a puzzle, answers it once and sees the solution', async () => {
+  const created = await call('POST', '/api/puzzles', { difficulty: 'medium' });
+  assert.equal(created.status, 201);
+  assert.ok(created.body.question);
+  assert.equal(created.body.answer, undefined, 'the answer stays on the server');
+
+  const verdict = await call('POST', `/api/puzzles/${created.body.id}/answer`, { answer: -1 });
+  assert.equal(verdict.status, 200);
+  assert.equal(verdict.body.correct, false); // answers are never negative
+  assert.ok(Number.isInteger(verdict.body.solution));
+  assert.ok(verdict.body.explanation);
+
+  // The revealed solution would be correct, but the puzzle is closed after one attempt.
+  const replay = await call('POST', `/api/puzzles/${created.body.id}/answer`, { answer: verdict.body.solution });
+  assert.equal(replay.status, 404);
+});
+
 test('invalid input is rejected', async () => {
   assert.equal((await call('POST', '/api/auth/login', {})).status, 400);
   assert.equal((await call('POST', '/api/items', { name: '' })).status, 400);

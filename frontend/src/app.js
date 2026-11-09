@@ -116,6 +116,35 @@ const App = {
             console.error("Delete Item Exception:", error.message);
             throw error;
         }
+    },
+
+    // ==========================================
+    // NUMBER QUEST PUZZLE GAME (logic and answers live in the backend)
+    // ==========================================
+    async newPuzzle(difficulty) {
+        const res = await fetch(`${API_URL}/puzzles`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ difficulty })
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || 'Could not start a puzzle');
+        }
+        return await res.json();
+    },
+
+    async answerPuzzle(id, answer) {
+        const res = await fetch(`${API_URL}/puzzles/${encodeURIComponent(id)}/answer`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ answer })
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || 'Could not check the answer');
+        }
+        return await res.json();
     }
 };
 
