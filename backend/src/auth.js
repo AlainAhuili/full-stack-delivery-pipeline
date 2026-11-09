@@ -1,27 +1,19 @@
-const express = require('express');
-const router = express.Router();
-const { registerUser, loginUser } = require('../services/authService'); // adjust path if needed
+// Authentication rules. Users are not stored yet and the token is a placeholder: registration
+// and login only validate the payload. Persisting users goes through userRepository.js and the
+// password_hash column (migration 003) once it is implemented.
+const { ValidationError } = require('./errors');
 
-// FIX: Change from '/api/auth/register' to just '/register'
-router.post('/register', async (req, res) => {
-    try {
-        // req.body should contain { username, password }
-        const result = await registerUser(db, crypto, req.body); 
-        res.status(201).json(result);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
-    }
-});
+function validateCredentials(input) {
+  const username = typeof input?.username === 'string' ? input.username.trim() : '';
+  const password = typeof input?.password === 'string' ? input.password : '';
+  if (!username || !password) {
+    throw new ValidationError('Username and password are required');
+  }
+  return { username, password };
+}
 
-// FIX: Change from '/api/auth/login' to just '/login'
-router.post('/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const result = await loginUser(db, crypto, username, password);
-        res.status(200).json(result);
-    } catch (err) {
-        res.status(401).json({ error: err.message });
-    }
-});
+function issueToken(username) {
+  return `ey-mock-session-token-for-${username}`;
+}
 
-module.exports = router;
+module.exports = { validateCredentials, issueToken };

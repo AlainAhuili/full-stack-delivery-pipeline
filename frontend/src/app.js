@@ -1,5 +1,6 @@
-// FIX: Clean, valid production endpoint string
-const API_URL = 'http://localhost:3001/api';
+// Same-origin path: nginx in the frontend container forwards /api/ to the backend, so the
+// UI works in every environment without knowing the backend's host or port.
+const API_URL = '/api';
 
 const App = {
     // ==========================================
@@ -117,3 +118,8 @@ const App = {
         }
     }
 };
+
+// Lets the unit tests load this file in Node; browsers have no `module` and skip this.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = App;
+}

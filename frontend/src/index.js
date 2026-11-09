@@ -104,11 +104,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             itemsList.innerHTML = '';
             items.forEach(item => {
+                // Built with textContent, not innerHTML: item names are user input.
                 const li = document.createElement('li');
-                li.innerHTML = `
-                    <span>${item.name}</span>
-                    <button class="delete-item-btn" data-id="${item.id}" style="background: #DC3545; padding: 4px 10px;">X</button>
-                `;
+                const label = document.createElement('span');
+                label.textContent = item.name;
+                const button = document.createElement('button');
+                button.className = 'delete-item-btn';
+                button.dataset.id = String(item.id);
+                button.style.background = '#DC3545';
+                button.style.padding = '4px 10px';
+                button.textContent = 'X';
+                li.append(label, button);
                 itemsList.appendChild(li);
             });
         } catch (err) {

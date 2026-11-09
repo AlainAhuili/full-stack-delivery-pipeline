@@ -1,11 +1,13 @@
+# Local development: `make package` builds the images, then `docker compose up -d`.
+# UI on http://localhost:8080 (API under /api), backend directly on :3000, PostgreSQL on :5432.
 services:
   database:
     image: crud-database:${GIT_SHA:-local}
     pull_policy: never
     environment:
-      - POSTGRES_DB=crud_db
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=supersecurepassword
+      POSTGRES_DB: crud_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local_dev_password # local only; never reuse elsewhere
     ports:
       - "5432:5432"
     healthcheck:
@@ -18,10 +20,10 @@ services:
     image: crud-backend:${GIT_SHA:-local}
     pull_policy: never
     environment:
-      - DB_HOST=database
-      - DB_USER=postgres
-      - DB_PASSWORD=supersecurepassword
-      - DB_NAME=crud_db
+      DB_HOST: database
+      DB_USER: postgres
+      DB_PASSWORD: local_dev_password
+      DB_NAME: crud_db
     ports:
       - "3000:3000"
     depends_on:
@@ -31,7 +33,10 @@ services:
   frontend:
     image: crud-frontend:${GIT_SHA:-local}
     pull_policy: never
+    environment:
+      BACKEND_URL: http://backend:3000
     ports:
       - "8080:8080"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy

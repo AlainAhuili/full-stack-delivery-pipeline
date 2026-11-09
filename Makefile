@@ -1,54 +1,67 @@
-.PHONY: commit-stage lint test-unit package acceptance clean
+.PHONY: install lint test-unit test-component commit-stage package acceptance pipeline \
+        clean dev-up dev-down prod-up prod-status prod-down
 
-# Dynamically resolve the short SHA locally or fallback to 'local'
-GIT_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "local")
+# Release candidate tag: the short commit SHA, or "local" outside a git checkout.
+GIT_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo local)
 export GIT_SHA
 
-commit-stage: lint test-unit package
-	@echo "Commit Stage Passed! Artifacts created with tag: $(GIT_SHA)"
+ACCEPTANCE = docker compose -f docker-compose.acceptance.yml
+PRODUCTION = docker compose -f docker-compose.production.yml
 
+install:
+	cd backend && npm ci
+	cd frontend && npm ci
+
+# ---- 1. Commit stage: fast checks, then build the images exactly once ------------------
 lint:
-	cd frontend && npm run lint
 	cd backend && npm run lint
+	cd frontend && npm run lint
+	node scripts/check-syntax.js tests
 
 test-unit:
-	cd frontend && npm run test:unit
 	cd backend && npm run test:unit
+	cd frontend && npm run test:unit
+
+test-component:
+	cd backend && npm run test:component
 
 package:
-	@echo "Building immutable Docker images..."
-	sudo docker build -t crud-frontend:$(GIT_SHA) ./frontend
-	sudo docker build -t crud-backend:$(GIT_SHA) ./backend
-	sudo docker build -t crud-database:$(GIT_SHA) ./database
+	@echo "Building release candidate images tagged $(GIT_SHA)"
+	docker build -t crud-frontend:$(GIT_SHA) ./frontend
+	docker build -t crud-backend:$(GIT_SHA) ./backend
+	docker build -t crud-database:$(GIT_SHA) ./database
 
+commit-stage: lint test-unit test-component package
+	@echo "Commit stage passed: release candidate $(GIT_SHA)"
+
+# ---- 2. Acceptance stage: the same images in a throwaway environment -------------------
 acceptance:
-	@echo "Spinning up transient Acceptance Testing Environment with tag: $(GIT_SHA)"
-	# CRITICAL: We pass GIT_SHA directly inside the sudo command context
-	sudo GIT_SHA=$(GIT_SHA) docker compose -f docker-compose.acceptance.yml up -d --wait
-	@echo "Executing E2E Acceptance Suite..."
-	node tests/acceptance/auth-flow.spec.js || (make clean && exit 1)
-	@echo "Tearing down transient environment..."
-	make clean
-	
-# Run local production using the current validated Git SHA
-prod-up:
-	@echo "Launching Persistent Local Production Environment..."
-	sudo GIT_SHA=$(shell git rev-parse --short HEAD) docker compose -f docker-compose.production.yml up -d
+	@echo "Starting acceptance environment for $(GIT_SHA)"
+	$(ACCEPTANCE) up -d --wait
+	node --test "tests/acceptance/**/*.test.js" || ($(MAKE) clean && exit 1)
+	$(MAKE) clean
 
-# Check the health and uptime of production workloads
-prod-status:
-	sudo docker compose -f docker-compose.production.yml ps
+clean:
+	$(ACCEPTANCE) down -v --remove-orphans
 
-# Bring down production without losing your database records
-prod-down:
-	@echo "Stopping Production Services Safely..."
-	sudo docker compose -f docker-compose.production.yml down
-	
 pipeline:
-	@echo "Starting Complete CI/CD Pipeline Automation Suite..."
 	$(MAKE) commit-stage
 	$(MAKE) acceptance
 
-clean:
-	# CRITICAL: Do the same here so cleanup finds the correct images
-	sudo GIT_SHA=$(GIT_SHA) docker compose -f docker-compose.acceptance.yml down -v
+# ---- Local development -----------------------------------------------------------------
+dev-up: package
+	docker compose up -d --wait
+
+dev-down:
+	docker compose down
+
+# ---- 3. Production (local): needs a .env file, see .env.example ------------------------
+prod-up:
+	$(PRODUCTION) up -d --wait
+
+prod-status:
+	$(PRODUCTION) ps
+
+# Keeps the database volume, so records survive.
+prod-down:
+	$(PRODUCTION) down

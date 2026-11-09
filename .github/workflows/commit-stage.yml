@@ -1,27 +1,33 @@
-name: Commit Stage
+name: Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  validate-and-test:
-    runs-on: ubuntu-latest
+  commit-and-acceptance:
+    name: Commit and acceptance stages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - name: Checkout Codebase
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "22"
 
-      - name: Install Dependencies
-        run: |
-          cd backend && npm ci
-          cd ../frontend && npm ci
+      - name: Install dependencies
+        run: make install
 
-      - name: Run Unified Orchestration Pipeline
-        run: make pipeline
+      # Lint, unit and component tests, then build the images once (tagged with the commit SHA).
+      - name: Commit stage
+        run: make commit-stage
+
+      # Runs the acceptance tests against those same images.
+      - name: Acceptance stage
+        run: make acceptance
