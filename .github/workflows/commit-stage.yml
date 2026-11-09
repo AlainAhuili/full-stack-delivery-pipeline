@@ -31,3 +31,86 @@ jobs:
       # Runs the acceptance tests against those same images.
       - name: Acceptance stage
         run: make acceptance
+
+      # Hand the accepted images to the production stage unchanged (build once, promote).
+      - name: Save release candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          tag=$(git rev-parse --short HEAD)
+          docker save "crud-frontend:$tag" "crud-backend:$tag" | gzip > release-candidate.tar.gz
+          echo "$tag" > release-candidate.tag
+      - name: Upload release candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: |
+            release-candidate.tar.gz
+            release-candidate.tag
+          retention-days: 7
+
+  # ---- Production stage: Google Cloud Run (infrastructure in infra/terraform) -----------------
+  # Logs in through Workload Identity Federation: only this repository's "production"
+  # environment (main branch only) may act as the github-deployer service account; no key is
+  # stored. Settings come from the environment's variables.
+  production:
+    name: Production stage
+    needs: commit-and-acceptance
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    env:
+      REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/crud
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+
+      - name: Load release candidate
+        run: |
+          gunzip -c release-candidate.tar.gz | docker load
+          echo "TAG=$(cat release-candidate.tag)" >> "$GITHUB_ENV"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Push images to Artifact Registry
+        run: |
+          gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+          for part in frontend backend; do
+            docker tag "crud-$part:$TAG" "$REGISTRY/crud-$part:$TAG"
+            docker push "$REGISTRY/crud-$part:$TAG"
+          done
+
+      - name: Deploy
+        id: deploy
+        run: |
+          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --container=frontend --image="$REGISTRY/crud-frontend:$TAG" \
+            --container=backend --image="$REGISTRY/crud-backend:$TAG" \
+            --quiet
+          url=$(gcloud run services describe "${{ vars.CLOUD_RUN_SERVICE }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format='value(status.url)')
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # Production smoke test: UI served, API reachable through the proxy, items readable.
+      - name: Smoke test
+        run: |
+          url="${{ steps.deploy.outputs.url }}"
+          curl -fsS "$url/" | grep -q "Full-Stack CRUD Application"
+          curl -fsS "$url/api/health" | grep -q '"status":"ok"'
+          curl -fsS -o /dev/null "$url/api/items"
